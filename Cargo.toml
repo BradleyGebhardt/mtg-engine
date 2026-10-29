@@ -4,4 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-sqlite = "0.37.4"
+rusqlite = "0.41.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_rusqlite = "0.44.0"
