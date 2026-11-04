@@ -6,17 +6,19 @@ use std::str::FromStr;
 #[serde(rename_all = "camelCase")]
 pub struct Card {
     pub name: String,
-    pub colors: String,
+    #[serde(deserialize_with = "deserialize_colors", default)]
+    pub colors: Vec<Colors>,
     pub color_identity: String,
     pub defense: Option<String>,
     // 1. Serde now parses the comma-separated string directly into your Vec enum!
     #[serde(deserialize_with = "deserialize_keywords", default)]
     pub keywords: Vec<Keywords>,
+    pub text: String,
 }
 
 impl fmt::Display for Card {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name)
+        write!(f, "{} :: {} :: {:?}", self.name, self.text, self.colors)
     }
 }
 
@@ -87,4 +89,64 @@ where
         .collect();
 
     Ok(keywords)
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Colors {
+    White,
+    Blue,
+    Black,
+    Red,
+    Green,
+    Colorless,
+}
+
+impl AsRef<str> for Colors {
+    fn as_ref(&self) -> &str {
+        match self {
+            Colors::White => "W",
+            Colors::Blue => "U",
+            Colors::Black => "B",
+            Colors::Red => "R",
+            Colors::Green => "G",
+            Colors::Colorless => "C",
+        }
+    }
+}
+
+impl FromStr for Colors {
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        match input {
+            "W" => Ok(Colors::White),
+            "U" => Ok(Colors::Blue),
+            "B" => Ok(Colors::Black),
+            "R" => Ok(Colors::Red),
+            "G" => Ok(Colors::Green),
+            "C" => Ok(Colors::Colorless),
+            _ => Err(()),
+        }
+    }
+}
+
+// 2. Custom deserializer function to split and parse the string
+fn deserialize_colors<'de, D>(deserializer: D) -> Result<Vec<Colors>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // Option<String> handles cases where the field is null or a string
+    let s: Option<String> = Deserialize::deserialize(deserializer)?;
+
+    let Some(raw_string) = s else {
+        return Ok(Vec::new());
+    };
+
+    let colors = raw_string
+        .split(',')
+        .map(|item| item.trim())
+        .filter_map(|item| Colors::from_str(item).ok())
+        .collect();
+
+    Ok(colors)
 }

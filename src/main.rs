@@ -2,10 +2,9 @@ mod card;
 mod db;
 
 use card::card::{Card, Keywords};
-use db::db::{CardFilter, fetch_cards_all, fetch_cards_filtered};
+use db::db::{CardFilter, fetch_cards_filtered};
 
 use std::error::Error;
-
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -18,14 +17,19 @@ struct Args {
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
-    let filter = CardFilter {
-        full_search: None,
-        name: None,
+    // Check if a query argument was passed, otherwise default to an empty filter
+    let filter = match args.query {
+        Some(ref q) => CardFilter::from_query_str(q),
+        None => CardFilter::default(),
     };
 
     let cards = fetch_cards_filtered(&filter)?;
 
-    println!("Card Count: {}", cards.iter().count());
+    for card in cards {
+        println!("{card}");
+    }
+
+    // println!("{}", cards.len());
 
     Ok(())
 }
