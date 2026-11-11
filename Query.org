@@ -1,0 +1,30 @@
+#+title: Query
+
+This doc will be going over the decided format and structure of the query string passed via the `--query` arg.
+
+* Keywords
+
+- name :: The name of a card to filter by
+  - SINGLE :: name:"Serra Angel"
+  - MULTI :: name:"Serra Angel" name:Plains
+
+- color :: The color shorthand, (W, U, B, R, G, C)
+  - SINGLE :: color:R
+  - MULTI ::
+    - OR :: color:W color:R
+    - AND :: color:WR
+
+- keyword :: The keyword
+  - SINGLE :: keyword:Flash
+  - MULTI ::
+    - OR :: keyword:Flash keyword:DoubleStrike
+    - AND :: keyword:"Flash DoubleStrike"
+
+- cmc :: The converted mana cost
+  - SINGLE :: cmc
+
+- type :: The card type (Land, Creature, Angel, Artifact, etc...)
+  - SINGLE :: type:Angel
+  - MULTI ::
+    - OR :: type:Angel type:Land
+    - AND :: type:"Creature Angel Legendary"
