@@ -5,6 +5,21 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.6.7", features = ["derive"] }
+imgui = "0.12.0"
 rusqlite = "0.41.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_rusqlite = "0.44.0"
+
+# 1. Pull the unified git version of raylib for your main code
+raylib = { git = "https://github.com/deltaphc/raylib-rs", branch = "master" }
+# 2. Pull the matching imgui wrapper
+raylib_imgui = { git = "https://github.com/NexushasTaken/raylib_imgui", branch = "master" }
+http = "1.5.0"
+ureq = "3.5.1"
+serde_json = "1.0.154"
+strum = { version = "0.28.0", features = ["derive"] }
+strum_macros = "0.28.0"
+
+[patch.crates-io]
+# 3. Force raylib_imgui's internal dependency to also use this exact git commit
+raylib = { git = "https://github.com/deltaphc/raylib-rs", branch = "master" }

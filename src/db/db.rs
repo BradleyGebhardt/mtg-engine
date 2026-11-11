@@ -10,16 +10,6 @@ pub struct CardFilter {
 }
 
 impl CardFilter {
-    pub fn serialize_to_string(&self) -> String {
-        let mut query = String::from("");
-
-        if let Some(name) = &self.name {
-            query.push_str(&format!("name LIKE '%{name}%'"));
-        }
-
-        query
-    }
-
     pub fn from_query_str(query: &str) -> Self {
         let mut filter = CardFilter::default();
         let tokens = CardFilter::tokenize_query(query);
@@ -72,23 +62,6 @@ impl CardFilter {
         }
         tokens
     }
-}
-
-pub fn fetch_cards_all() -> Result<Vec<Card>> {
-    let conn = Connection::open("AllPrintings.sqlite")?;
-    let mut statement = conn.prepare("SELECT * FROM cards")?;
-
-    let mut cards: Vec<Card> = Vec::new();
-
-    let card_rows = serde_rusqlite::from_rows::<Card>(statement.query([])?);
-
-    for row in card_rows {
-        let row = row.expect("ERROR: Error reading rows");
-
-        cards.push(row);
-    }
-
-    Ok(cards)
 }
 
 pub fn fetch_cards_filtered(filter: &CardFilter) -> Result<Vec<Card>> {

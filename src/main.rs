@@ -1,10 +1,10 @@
 mod card;
 mod db;
 
-use card::card::{Card, Keywords};
 use db::db::{CardFilter, fetch_cards_filtered};
 
 use std::error::Error;
+
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -12,12 +12,13 @@ use clap::Parser;
 struct Args {
     #[arg(long)]
     query: Option<String>,
+    #[arg(long)]
+    json: bool,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
-    // Check if a query argument was passed, otherwise default to an empty filter
     let filter = match args.query {
         Some(ref q) => CardFilter::from_query_str(q),
         None => CardFilter::default(),
@@ -25,11 +26,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let cards = fetch_cards_filtered(&filter)?;
 
-    for card in cards {
-        println!("{card}");
-    }
+    // println!("{}", card::card::Colors::White.as_ref());
 
-    // println!("{}", cards.len());
+    // std::process::exit(0);
+
+    if args.json {
+        println!("{}", serde_json::to_string(&cards)?);
+    }
 
     Ok(())
 }

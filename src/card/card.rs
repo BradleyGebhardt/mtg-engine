@@ -1,12 +1,13 @@
-use std::fmt;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt::{self, Display};
 use std::str::FromStr;
+use strum_macros::{AsRefStr, EnumString};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Card {
     pub name: String,
-    #[serde(deserialize_with = "deserialize_colors", default)]
+    #[serde(deserialize_with = "deserialize_colors", serialize_with = "serialize_colors",  default)]
     pub colors: Vec<Colors>,
     pub color_identity: String,
     pub defense: Option<String>,
@@ -22,7 +23,7 @@ impl fmt::Display for Card {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, AsRefStr, EnumString)]
 pub enum Keywords {
     Flying,
     Reach,
@@ -33,41 +34,6 @@ pub enum Keywords {
     Daybound,
     Trample,
     Nightbound,
-}
-
-impl AsRef<str> for Keywords {
-    fn as_ref(&self) -> &str {
-        match self {
-            Keywords::Flying => "Flying",
-            Keywords::Haste => "Haste",
-            Keywords::Partner => "Partner",
-            Keywords::Reach => "Reach",
-            Keywords::Vigilance => "Vigilance",
-            Keywords::Transform => "Transform",
-            Keywords::Daybound => "Daybound",
-            Keywords::Trample => "Trample",
-            Keywords::Nightbound => "Nightbound",
-        }
-    }
-}
-
-impl FromStr for Keywords {
-    type Err = ();
-
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
-        match input {
-            "Flying" => Ok(Keywords::Flying),
-            "Haste" => Ok(Keywords::Haste),
-            "Partner" => Ok(Keywords::Partner),
-            "Reach" => Ok(Keywords::Reach),
-            "Vigilance" => Ok(Keywords::Vigilance),
-            "Transform" => Ok(Keywords::Transform),
-            "Daybound" => Ok(Keywords::Daybound),
-            "Trample" => Ok(Keywords::Trample),
-            "Nightbound" => Ok(Keywords::Nightbound),
-            _ => Err(()),
-        }
-    }
 }
 
 // 2. Custom deserializer function to split and parse the string
@@ -91,43 +57,20 @@ where
     Ok(keywords)
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Serialize, AsRefStr, EnumString)]
 pub enum Colors {
+    #[strum(serialize = "W")]
     White,
+    #[strum(serialize = "U")]
     Blue,
+    #[strum(serialize = "B")]
     Black,
+    #[strum(serialize = "R")]
     Red,
+    #[strum(serialize = "G")]
     Green,
+    #[strum(serialize = "C")]
     Colorless,
-}
-
-impl AsRef<str> for Colors {
-    fn as_ref(&self) -> &str {
-        match self {
-            Colors::White => "W",
-            Colors::Blue => "U",
-            Colors::Black => "B",
-            Colors::Red => "R",
-            Colors::Green => "G",
-            Colors::Colorless => "C",
-        }
-    }
-}
-
-impl FromStr for Colors {
-    type Err = ();
-
-    fn from_str(input: &str) -> Result<Self, Self::Err> {
-        match input {
-            "W" => Ok(Colors::White),
-            "U" => Ok(Colors::Blue),
-            "B" => Ok(Colors::Black),
-            "R" => Ok(Colors::Red),
-            "G" => Ok(Colors::Green),
-            "C" => Ok(Colors::Colorless),
-            _ => Err(()),
-        }
-    }
 }
 
 // 2. Custom deserializer function to split and parse the string
@@ -149,4 +92,13 @@ where
         .collect();
 
     Ok(colors)
+}
+
+fn serialize_colors<S>(colors: &[Colors], serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    // Map each color variant to its AsRef<str> shorthand ("W", "U", "B", "R", "G", "C")
+    let shorthands: Vec<&str> = colors.iter().map(|c| c.as_ref()).collect();
+    shorthands.serialize(serializer)
 }
