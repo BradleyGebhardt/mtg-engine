@@ -1,3 +1,4 @@
+use rusqlite::{ToSql, types::ToSqlOutput};
 use std::{
     collections::HashMap,
     fmt::{self, Display},
@@ -222,10 +223,19 @@ fn expr_field(expr: &QueryExpr) -> TokenField {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SqlParam {
     Text(String),
     Int(i64),
+}
+
+impl ToSql for SqlParam {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        match self {
+            SqlParam::Text(s) => s.to_sql(),
+            SqlParam::Int(i) => i.to_sql(),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -239,15 +249,87 @@ impl SqlBuilder {
         "?"
     }
 
-    pub fn build(&mut self, tokens: Vec<Token>) -> Result<String, String> {
-        if tokens.is_empty() {
-            return Ok("1=1".to_string());
+    pub fn build(&mut self, expr: &QueryExpr) -> Result<String, String> {
+        match expr {
+            QueryExpr::And(exprs) => {
+                if exprs.is_empty() {
+                    return Ok("1=1".to_string());
+                }
+                let parts: Result<Vec<String>, String> =
+                    exprs.iter().map(|e| self.build(e)).collect();
+                let parts = parts?;
+                Ok(if parts.len() == 1 {
+                    parts.into_iter().next().unwrap()
+                } else {
+                    format!("({})", parts.join(" AND "))
+                })
+            }
+            QueryExpr::Or(exprs) => {
+                if exprs.is_empty() {
+                    return Ok("1=0".to_string());
+                }
+                let parts: Result<Vec<String>, String> =
+                    exprs.iter().map(|e| self.build(e)).collect();
+                let parts = parts?;
+                Ok(if parts.len() == 1 {
+                    parts.into_iter().next().unwrap()
+                } else {
+                    format!("({})", parts.join(" OR "))
+                })
+            }
+            QueryExpr::Not(inner) => Ok(format!("NOT ({})", self.build(inner)?)),
+            QueryExpr::Condition(token) => self.compile_condition(token),
         }
+    }
 
-        for token in tokens {
-            println!("{token}");
+    fn compile_condition(&mut self, token: &Token) -> Result<String, String> {
+        match token.field {
+            TokenField::Name => match token.operator {
+                Operator::Eq => {
+                    let p = self.bind(SqlParam::Text(token.value.clone()));
+                    Ok(format!("name = {}", p))
+                }
+                Operator::Colon => {
+                    let p = self.bind(SqlParam::Text(format!("%{}%", token.value)));
+                    Ok(format!("name LIKE {}", p))
+                }
+                _ => Err(format!(
+                    "Unsupported operator '{}' for name",
+                    token.operator
+                )),
+            },
+
+            TokenField::Cmc => {
+                let val: i64 = token
+                    .value
+                    .parse()
+                    .map_err(|_| format!("Invalid CMC number '{}'", token.value))?;
+                let sql_op = match token.operator {
+                    Operator::Colon | Operator::Eq => "=",
+                    Operator::Lt => "<",
+                    Operator::Lte => "<=",
+                    Operator::Gt => ">",
+                    Operator::Gte => ">=",
+                };
+                let p = self.bind(SqlParam::Int(val));
+                Ok(format!("manaValue {} {}", sql_op, p))
+            }
+            TokenField::Color => match token.value.to_ascii_uppercase().as_str() {
+                "C" => Ok("(colors IS NULL OR colors = '')".to_string()),
+                c @ ("W" | "U" | "B" | "R" | "G") => {
+                    let p = self.bind(SqlParam::Text(format!("%{}%", c)));
+                    Ok(format!("colors LIKE {}", p))
+                }
+                other => Err(format!("Invalid color '{}'", other)),
+            },
+            TokenField::Type => {
+                let p = self.bind(SqlParam::Text(format!("%{}%", token.value)));
+                Ok(format!("type LIKE {}", p))
+            }
+            TokenField::Keyword => {
+                let p = self.bind(SqlParam::Text(format!("%,{},%", token.value)));
+                Ok(format!("(',' || IFNULL(keywords, '') || ',') LIKE {}", p))
+            }
         }
-
-        Ok(String::new())
     }
 }
