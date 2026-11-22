@@ -1,7 +1,9 @@
 mod card;
 mod db;
+mod query;
 
 use db::db::{CardFilter, fetch_cards_filtered};
+use query::{Tokenizer, Lexer};
 
 use std::error::Error;
 
@@ -10,7 +12,6 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
-    #[arg(long)]
     query: Option<String>,
     #[arg(long)]
     json: bool,
@@ -19,19 +20,15 @@ struct Args {
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
-    let filter = match args.query {
-        Some(ref q) => CardFilter::from_query_str(q),
-        None => CardFilter::default(),
+    let tokenizer = match args.query {
+        Some(ref q) => Tokenizer::new(q.to_string()),
+        None => Tokenizer::new(String::from("")),
     };
 
-    let cards = fetch_cards_filtered(&filter)?;
+    let lexer = Lexer::new(tokenizer.split_tokens());
 
-    // println!("{}", card::card::Colors::White.as_ref());
-
-    // std::process::exit(0);
-
-    if args.json {
-        println!("{}", serde_json::to_string(&cards)?);
+    for token in lexer.tokens() {
+        println!("{}", token);
     }
 
     Ok(())
