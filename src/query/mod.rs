@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fmt::{self, Display},
     str::FromStr,
 };
@@ -41,6 +42,14 @@ impl Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "[{}] [{}] [{}]", self.field, self.operator, self.value)
     }
+}
+
+#[derive(Debug)]
+pub enum QueryExpr {
+    Condition(Token),    // Leaf node: a single atomic check (e.g., Color = "W")
+    And(Vec<QueryExpr>), // All must match
+    Or(Vec<QueryExpr>),  // Any must match
+    Not(Box<QueryExpr>), // Must not match
 }
 
 pub struct Tokenizer<'a> {
@@ -133,5 +142,112 @@ impl Lexer {
         }
 
         Ok(tokens)
+    }
+}
+
+pub struct Parser;
+
+impl Parser {
+    pub fn parse(tokens: Vec<Token>) -> Result<QueryExpr, String> {
+        if tokens.is_empty() {
+            return Ok(QueryExpr::And(vec![]));
+        }
+
+        // Group tokens by field so repeated keys become `OR` branches
+        let mut grouped: HashMap<TokenField, Vec<QueryExpr>> = HashMap::new();
+        let mut field_order: Vec<TokenField> = Vec::new();
+
+        for token in tokens {
+            if !grouped.contains_key(&token.field) {
+                field_order.push(token.field);
+            }
+            let expr = Self::expand_token(token)?;
+            grouped.entry(expr_field(&expr)).or_default().push(expr);
+        }
+
+        let mut root_and = Vec::with_capacity(field_order.len());
+        for field in field_order {
+            let mut exprs = grouped.remove(&field).unwrap();
+            if exprs.len() == 1 {
+                root_and.push(exprs.pop().unwrap());
+            } else {
+                root_and.push(QueryExpr::Or(exprs));
+            }
+        }
+
+        Ok(if root_and.len() == 1 {
+            root_and.pop().unwrap()
+        } else {
+            QueryExpr::And(root_and)
+        })
+    }
+
+    fn expand_token(token: Token) -> Result<QueryExpr, String> {
+        let parts: Vec<String> = match token.field {
+            TokenField::Color => token.value.chars().map(|c| c.to_string()).collect(),
+            TokenField::Type | TokenField::Keyword => {
+                token.value.split_whitespace().map(str::to_string).collect()
+            }
+            TokenField::Name | TokenField::Cmc => vec![token.value],
+        };
+
+        if parts.is_empty() {
+            return Err(format!("Empty value provided for '{}'", token.field));
+        }
+
+        let mut conditions: Vec<QueryExpr> = parts
+            .into_iter()
+            .map(|val| {
+                QueryExpr::Condition(Token {
+                    field: token.field,
+                    operator: token.operator,
+                    value: val,
+                })
+            })
+            .collect();
+
+        Ok(if conditions.len() == 1 {
+            conditions.pop().unwrap()
+        } else {
+            QueryExpr::And(conditions)
+        })
+    }
+}
+
+fn expr_field(expr: &QueryExpr) -> TokenField {
+    match expr {
+        QueryExpr::Condition(t) => t.field,
+        QueryExpr::And(list) | QueryExpr::Or(list) => expr_field(&list[0]),
+        QueryExpr::Not(inner) => expr_field(inner),
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum SqlParam {
+    Text(String),
+    Int(i64),
+}
+
+#[derive(Debug, Default)]
+pub struct SqlBuilder {
+    pub params: Vec<SqlParam>,
+}
+
+impl SqlBuilder {
+    fn bind(&mut self, param: SqlParam) -> &'static str {
+        self.params.push(param);
+        "?"
+    }
+
+    pub fn build(&mut self, tokens: Vec<Token>) -> Result<String, String> {
+        if tokens.is_empty() {
+            return Ok("1=1".to_string());
+        }
+
+        for token in tokens {
+            println!("{token}");
+        }
+
+        Ok(String::new())
     }
 }

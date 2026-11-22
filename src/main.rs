@@ -26,11 +26,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
 
     let lexer = Lexer::new(tokenizer.split_tokens()?);
+    let ast = query::Parser::parse(lexer.tokens()?)?;
 
-
-    for token in lexer.tokens()? {
-        println!("{}", token);
-    }
+    println!("{ast:?}");
 
     Ok(())
 }
