@@ -3,7 +3,7 @@ mod db;
 mod query;
 
 use db::db::{CardFilter, fetch_cards_filtered};
-use query::{Tokenizer, Lexer};
+use query::{Tokenizer, Lexer, SqlBuilder};
 
 use std::error::Error;
 
@@ -27,10 +27,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let lexer = Lexer::new(tokenizer.split_tokens()?);
 
-
-    for token in lexer.tokens()? {
-        println!("{}", token);
-    }
+    let mut sql_builder = SqlBuilder::default();
+    let query = sql_builder.build(lexer.tokens()?);
 
     Ok(())
 }

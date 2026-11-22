@@ -35,11 +35,29 @@ pub struct Token {
     pub field: TokenField,
     pub operator: Operator,
     pub value: String,
+    pub and: Option<Box<Self>>,
 }
 
 impl Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "[{}] [{}] [{}]", self.field, self.operator, self.value)
+    }
+}
+
+impl Token {
+    pub fn chain(field: TokenField, operator: Operator, values: Vec<String>) -> Option<Self> {
+        let mut head: Option<Token> = None;
+
+        for value in values.into_iter().rev() {
+            head = Some(Token {
+                field,
+                operator,
+                value,
+                and: head.map(Box::new),
+            });
+        }
+
+        head
     }
 }
 
@@ -59,7 +77,7 @@ impl<'a> Tokenizer<'a> {
 
         for ch in self.content.chars() {
             match ch {
-                '"' => {
+                '"' | '\'' => {
                     in_quotes = !in_quotes;
                 }
                 c if c.is_whitespace() && !in_quotes => {
@@ -125,13 +143,68 @@ impl Lexer {
                 return Err(format!("Missing value after '{}{}'", field_str, op_str));
             }
 
-            tokens.push(Token {
-                field,
-                operator,
-                value,
-            });
+            let parts: Vec<String> = match field {
+                // Each character in `color:WR` becomes a separate node (`"W"`, `"R"`)
+                TokenField::Color => value.chars().map(|c| c.to_string()).collect(),
+
+                // Space-separated words in `type:"Creature Angel"` or `keyword:"Flash DoubleStrike"`
+                TokenField::Type | TokenField::Keyword => {
+                    value.split_whitespace().map(str::to_string).collect()
+                }
+
+                // `name` and `cmc` stay as a single value
+                TokenField::Name | TokenField::Cmc => vec![value],
+            };
+
+            let token = Token::chain(field, operator, parts)
+                .ok_or_else(|| format!("Missing value after '{}{}'", field_str, op_str))?;
+
+            tokens.push(token);
         }
 
         Ok(tokens)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum SqlParam {
+    Text(String),
+    Int(i64),
+}
+
+#[derive(Debug, Default)]
+pub struct SqlBuilder {
+    pub params: Vec<SqlParam>,
+}
+
+impl SqlBuilder {
+    fn bind(&mut self, param: SqlParam) -> &'static str {
+        self.params.push(param);
+        "?"
+    }
+
+    pub fn build(&mut self, tokens: Vec<Token>) -> Result<String, String> {
+        if tokens.is_empty() {
+            return Ok("1=1".to_string());
+        }
+
+        for token in tokens {
+            match token.field {
+                TokenField::Color => {
+                    println!("{token}");
+                    let mut nested = &token.and;
+                    let mut indent = 1;
+
+                    while let Some(and) = nested {
+                        println!("{}AND {and}", "\t".repeat(indent));
+                        nested = &and.and;
+                        indent += 1;
+                    }
+                },
+                _ => println!("{token}")
+            }
+        }
+
+        Ok(String::new())
     }
 }
