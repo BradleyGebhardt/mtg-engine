@@ -1,24 +1,59 @@
-use crate::card::card;
-
 use std::{
     fmt::{self, Display},
     str::FromStr,
 };
+use strum::{Display, EnumString};
 
-use serde::{Deserialize, Serialize};
-use strum::{self, Display, EnumString};
-
-pub struct Tokenizer {
-    pub content: String,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, Display)]
+#[strum(serialize_all = "lowercase")]
+pub enum TokenField {
+    Name,
+    Color,
+    Cmc,
+    Keyword,
+    Type,
 }
 
-impl Tokenizer {
-    pub fn new(content: String) -> Self {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, Display)]
+pub enum Operator {
+    #[strum(serialize = ":")]
+    Colon,
+    #[strum(serialize = "=")]
+    Eq,
+    #[strum(serialize = "<")]
+    Lt,
+    #[strum(serialize = "<=")]
+    Lte,
+    #[strum(serialize = ">")]
+    Gt,
+    #[strum(serialize = ">=")]
+    Gte,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Token {
+    pub field: TokenField,
+    pub operator: Operator,
+    pub value: String,
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[{}] [{}] [{}]", self.field, self.operator, self.value)
+    }
+}
+
+pub struct Tokenizer<'a> {
+    pub content: &'a str,
+}
+
+impl<'a> Tokenizer<'a> {
+    pub fn new(content: &'a str) -> Self {
         Self { content }
     }
 
-    pub fn split_tokens(&self) -> Vec<String> {
-        let mut tokens: Vec<String> = Vec::new();
+    pub fn split_tokens(&self) -> Result<Vec<String>, String> {
+        let mut tokens = Vec::new();
         let mut in_quotes = false;
         let mut current_token = String::new();
 
@@ -26,52 +61,25 @@ impl Tokenizer {
             match ch {
                 '"' => {
                     in_quotes = !in_quotes;
-                    current_token.push(ch);
                 }
-
                 c if c.is_whitespace() && !in_quotes => {
                     if !current_token.is_empty() {
                         tokens.push(std::mem::take(&mut current_token));
                     }
                 }
-
-                _ => {
-                    current_token.push(ch);
-                }
+                _ => current_token.push(ch),
             }
         }
 
-        if !current_token.is_empty() {
-            tokens.push(current_token.clone());
+        if in_quotes {
+            return Err("Syntax error: Unclosed quotation mark in query".into());
         }
 
-        tokens
-    }
-}
+        if !current_token.is_empty() {
+            tokens.push(current_token);
+        }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumString, Display)]
-#[strum(serialize_all = "lowercase")]
-pub enum TokenField {
-    Name(String),
-    Color(String),
-    Cmc(String),
-}
-
-pub struct Token {
-    field: String,
-    operator: String,
-    value: String,
-}
-
-impl Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "[{field}] [{operator}] [{value}]",
-            field = self.field,
-            operator = self.operator,
-            value = self.value
-        )
+        Ok(tokens)
     }
 }
 
@@ -84,47 +92,37 @@ impl Lexer {
         Self { content }
     }
 
-    pub fn tokens(&self) -> Vec<Token> {
-        let mut tokens: Vec<Token> = Vec::new();
-        let mut field: String;
-        let mut operator: String;
-        let mut value: String;
+    pub fn tokens(&self) -> Result<Vec<Token>, String> {
+        let mut tokens = Vec::with_capacity(self.content.len());
 
-        for token in self.content.iter() {
-            let mut n = 0;
+        for raw in &self.content {
+            // Find the byte index where the field name ends
+            let op_start = raw
+                .char_indices()
+                .find(|&(_, ch)| !ch.is_alphanumeric())
+                .map(|(idx, _)| idx)
+                .ok_or_else(|| format!("Missing operator and value in '{}'", raw))?;
 
-            while n < token.len()
-                && let ch = token.chars().nth(n).expect("Invalid char")
-                && ch.is_alphanumeric()
-            {
-                n += 1;
-            }
+            let field_str = &raw[..op_start];
+            let field = TokenField::from_str(&field_str.to_ascii_lowercase())
+                .map_err(|_| format!("Unknown field '{}'", field_str))?;
 
-            field = token[0..n].to_string();
+            // Find the byte index where the operator ends
+            let rest = &raw[op_start..];
+            let val_start = rest
+                .char_indices()
+                .find(|&(_, ch)| !matches!(ch, ':' | '=' | '<' | '>'))
+                .map(|(idx, _)| idx)
+                .unwrap_or(rest.len());
 
-            TokenField::from_str(&field).expect(&format!("ERROR: Unknown field [{}]", field));
+            let op_str = &rest[..val_start];
+            // `strum` automatically rejects invalid combos like `:=` or `>>`!
+            let operator = Operator::from_str(op_str)
+                .map_err(|_| format!("Invalid operator '{}' in '{}'", op_str, raw))?;
 
-            operator = String::new();
-
-            while n < token.len()
-                && let ch = token.chars().nth(n).expect("Invalid char")
-                && [':', '=', '<', '>'].contains(&ch)
-            {
-                if !operator.is_empty() && ch != '=' {
-                    panic!("ERROR: Syntax error in int comparitor")
-                }
-
-                operator.push(ch);
-
-                n += 1;
-            }
-
-            value = token[n..].to_string();
-
-            while n < token.len()
-                && let _ch = token.chars().nth(n).expect("Invalid char")
-            {
-                n += 1;
+            let value = rest[val_start..].to_string();
+            if value.is_empty() {
+                return Err(format!("Missing value after '{}{}'", field_str, op_str));
             }
 
             tokens.push(Token {
@@ -134,6 +132,6 @@ impl Lexer {
             });
         }
 
-        tokens
+        Ok(tokens)
     }
 }

@@ -21,13 +21,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
     let tokenizer = match args.query {
-        Some(ref q) => Tokenizer::new(q.to_string()),
-        None => Tokenizer::new(String::from("")),
+        Some(ref q) => Tokenizer::new(q),
+        None => Tokenizer::new(""),
     };
 
-    let lexer = Lexer::new(tokenizer.split_tokens());
+    let lexer = Lexer::new(tokenizer.split_tokens()?);
 
-    for token in lexer.tokens() {
+
+    for token in lexer.tokens()? {
         println!("{}", token);
     }
 
