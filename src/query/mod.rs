@@ -315,10 +315,10 @@ impl SqlBuilder {
                 Ok(format!("manaValue {} {}", sql_op, p))
             }
             TokenField::Color => match token.value.to_ascii_uppercase().as_str() {
-                "C" => Ok("(colors IS NULL OR colors = '')".to_string()),
+                "C" => Ok("(colorIdentity IS NULL OR colorIdentity = '')".to_string()),
                 c @ ("W" | "U" | "B" | "R" | "G") => {
                     let p = self.bind(SqlParam::Text(format!("%{}%", c)));
-                    Ok(format!("colors LIKE {}", p))
+                    Ok(format!("colorIdentity LIKE {}", p))
                 }
                 other => Err(format!("Invalid color '{}'", other)),
             },
