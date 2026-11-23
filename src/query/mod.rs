@@ -50,7 +50,7 @@ pub enum QueryExpr {
     Condition(Token),    // Leaf node: a single atomic check (e.g., Color = "W")
     And(Vec<QueryExpr>), // All must match
     Or(Vec<QueryExpr>),  // Any must match
-    Not(Box<QueryExpr>), // Must not match
+    // Not(Box<QueryExpr>), // Must not match
 }
 
 pub struct Tokenizer<'a> {
@@ -219,7 +219,7 @@ fn expr_field(expr: &QueryExpr) -> TokenField {
     match expr {
         QueryExpr::Condition(t) => t.field,
         QueryExpr::And(list) | QueryExpr::Or(list) => expr_field(&list[0]),
-        QueryExpr::Not(inner) => expr_field(inner),
+        // QueryExpr::Not(inner) => expr_field(inner),
     }
 }
 
@@ -277,7 +277,7 @@ impl SqlBuilder {
                     format!("({})", parts.join(" OR "))
                 })
             }
-            QueryExpr::Not(inner) => Ok(format!("NOT ({})", self.build(inner)?)),
+            // QueryExpr::Not(inner) => Ok(format!("NOT ({})", self.build(inner)?)),
             QueryExpr::Condition(token) => self.compile_condition(token),
         }
     }
