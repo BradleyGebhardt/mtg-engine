@@ -2,7 +2,7 @@ mod card;
 mod db;
 mod query;
 
-use db::db::{fetch_cards_filtered};
+use db::db::fetch_cards_filtered;
 
 use std::error::Error;
 
@@ -21,7 +21,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let cards = fetch_cards_filtered(args.query)?;
 
-    println!("Card Count: {}", cards.len());
+    if args.json {
+        println!("{}", serde_json::to_string(&cards)?);
+    } else {
+        for card in cards {
+            println!("{card}\n");
+        }
+    }
 
     Ok(())
 }
